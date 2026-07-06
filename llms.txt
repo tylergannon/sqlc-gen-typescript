@@ -1,7 +1,7 @@
 # sqlc-gen-typescript
 
-PagerGuild-owned sqlc WASM plugin for generating TypeScript query wrappers for
-PostgreSQL and postgres.js.
+Standalone sqlc WASM plugin for generating TypeScript query wrappers for
+PostgreSQL and postgres.js, maintained at `tylergannon/sqlc-gen-typescript`.
 
 Use this plugin from sqlc:
 
@@ -10,7 +10,7 @@ version: "2"
 plugins:
   - name: ts
     wasm:
-      url: https://github.com/pagerguild/sqlc-gen-typescript/releases/download/v0.5.3/sqlc-gen-typescript.wasm
+      url: https://github.com/tylergannon/sqlc-gen-typescript/releases/download/v0.5.3/sqlc-gen-typescript.wasm
 sql:
   - schema: "db/schema.sql"
     queries: "db/query.sql"

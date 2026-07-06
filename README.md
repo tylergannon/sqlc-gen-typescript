@@ -3,8 +3,9 @@
 TypeScript code generation for [`sqlc`](https://sqlc.dev/) targeting PostgreSQL and
 [`postgres.js`](https://github.com/porsager/postgres).
 
-This is PagerGuild-owned software. It is not maintained as an upstreamable fork,
-and the supported install path is the WASM binary published from this repository.
+This is standalone software maintained at
+[`tylergannon/sqlc-gen-typescript`](https://github.com/tylergannon/sqlc-gen-typescript).
+The supported install path is the WASM binary published from this repository.
 
 ## Status
 
@@ -20,14 +21,14 @@ workflows. Those are not the current product surface.
 
 ## Install
 
-Add the PagerGuild release binary to `sqlc.yaml`:
+Add the release binary to `sqlc.yaml`:
 
 ```yaml
 version: "2"
 plugins:
   - name: ts
     wasm:
-      url: https://github.com/pagerguild/sqlc-gen-typescript/releases/download/v0.5.3/sqlc-gen-typescript.wasm
+      url: https://github.com/tylergannon/sqlc-gen-typescript/releases/download/v0.5.3/sqlc-gen-typescript.wasm
 sql:
   - schema: "db/schema.sql"
     queries: "db/query.sql"
