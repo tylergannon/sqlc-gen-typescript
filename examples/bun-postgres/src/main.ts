@@ -15,6 +15,8 @@ async function main() {
     name: "Seal",
     bio: "Kissed from a rose",
     status: "active",
+    profile: { website: "https://example.com", verified: true },
+    notes: null,
   });
   if (author === null) {
     throw new Error("author not created");

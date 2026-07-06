@@ -46,5 +46,9 @@ postgres.js. Current bigint policy emits PostgreSQL `int8`/`bigint`/`bigserial`
 as TypeScript `number`, so configure OID 20 parsing as shown when selecting
 bigint values. This is intended for values below `Number.MAX_SAFE_INTEGER`.
 
+PostgreSQL `json` and `jsonb` are emitted as generated `JsonValue` aliases
+instead of `any`. Scalar JSON parameters are wrapped with `sql.json(...)`; for
+nullable JSON parameters, JavaScript `null` is sent as SQL `NULL`.
+
 Current supported surface: PostgreSQL, postgres.js, Node.js/Vercel. Do not rely
 on old Bun SQL, MySQL, SQLite, or upstream-sync README instructions.

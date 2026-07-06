@@ -66,6 +66,55 @@ function enumTypeDecl(name: string, enumDef: Enum): Node {
   );
 }
 
+function jsonTypeDecls(): Node[] {
+  return [
+    factory.createTypeAliasDeclaration(
+      [factory.createToken(SyntaxKind.ExportKeyword)],
+      factory.createIdentifier("JsonPrimitive"),
+      undefined,
+      factory.createUnionTypeNode([
+        factory.createKeywordTypeNode(SyntaxKind.StringKeyword),
+        factory.createKeywordTypeNode(SyntaxKind.NumberKeyword),
+        factory.createKeywordTypeNode(SyntaxKind.BooleanKeyword),
+        factory.createLiteralTypeNode(factory.createNull()),
+      ]),
+    ),
+    factory.createTypeAliasDeclaration(
+      [factory.createToken(SyntaxKind.ExportKeyword)],
+      factory.createIdentifier("JsonValue"),
+      undefined,
+      factory.createUnionTypeNode([
+        factory.createTypeReferenceNode(factory.createIdentifier("JsonPrimitive"), undefined),
+        factory.createTypeOperatorNode(
+          SyntaxKind.ReadonlyKeyword,
+          factory.createArrayTypeNode(
+            factory.createTypeReferenceNode(factory.createIdentifier("JsonValue"), undefined),
+          ),
+        ),
+        factory.createTypeLiteralNode([
+          factory.createIndexSignature(
+            [factory.createToken(SyntaxKind.ReadonlyKeyword)],
+            [
+              factory.createParameterDeclaration(
+                undefined,
+                undefined,
+                factory.createIdentifier("key"),
+                undefined,
+                factory.createKeywordTypeNode(SyntaxKind.StringKeyword),
+                undefined,
+              ),
+            ],
+            factory.createUnionTypeNode([
+              factory.createTypeReferenceNode(factory.createIdentifier("JsonValue"), undefined),
+              factory.createKeywordTypeNode(SyntaxKind.UndefinedKeyword),
+            ]),
+          ),
+        ]),
+      ]),
+    ),
+  ];
+}
+
 /**
  * Convert snake_case to PascalCase
  */
@@ -101,6 +150,7 @@ function codegen(input: GenerateRequest): GenerateResponse {
 
     // Track enums used in this file
     const fileEnums = new Set<string>();
+    let fileUsesJson = false;
 
     for (const query of queries) {
       const lowerName = query.name[0].toLowerCase() + query.name.slice(1);
@@ -124,6 +174,9 @@ function codegen(input: GenerateRequest): GenerateResponse {
           if (enumName) {
             fileEnums.add(enumName);
             usedEnums.add(enumName);
+          }
+          if (postgres.isJsonColumn(param.column)) {
+            fileUsesJson = true;
           }
         }
 
@@ -167,6 +220,9 @@ function codegen(input: GenerateRequest): GenerateResponse {
           if (enumName) {
             fileEnums.add(enumName);
             usedEnums.add(enumName);
+          }
+          if (postgres.isJsonColumn(col)) {
+            fileUsesJson = true;
           }
         }
 
@@ -232,7 +288,12 @@ function codegen(input: GenerateRequest): GenerateResponse {
       }
     }
 
-    // Add enum type declarations at the beginning of the file (after imports)
+    // Add shared JSON and enum type declarations at the beginning of the file (after imports)
+    const sharedTypeNodes: Node[] = [];
+    if (fileUsesJson) {
+      sharedTypeNodes.push(...jsonTypeDecls());
+    }
+
     const enumNodes: Node[] = [];
     for (const enumName of fileEnums) {
       const enumDef = enumMap.get(enumName);
@@ -243,7 +304,7 @@ function codegen(input: GenerateRequest): GenerateResponse {
 
     // Insert enum declarations after the preamble (imports)
     const preambleLength = postgres.preamble().length;
-    nodes.splice(preambleLength, 0, ...enumNodes);
+    nodes.splice(preambleLength, 0, ...sharedTypeNodes, ...enumNodes);
 
     files.push(
       new File({

@@ -117,6 +117,21 @@ Generated TypeScript types are compile-time types. The generated code does not
 post-process rows or validate runtime values. Runtime parsing belongs to
 postgres.js configuration.
 
+PostgreSQL `json` and `jsonb` columns are emitted as `JsonValue` instead of
+`any`:
+
+```ts
+export type JsonPrimitive = string | number | boolean | null;
+export type JsonValue =
+  | JsonPrimitive
+  | readonly JsonValue[]
+  | { readonly [key: string]: JsonValue | undefined };
+```
+
+JSON parameters are serialized with `sql.json(...)` in generated queries. For
+nullable JSON parameters, JavaScript `null` is sent as SQL `NULL`; use a
+non-nullable JSON parameter if you need to write the JSON literal `null`.
+
 ## Vercel Notes
 
 The generated code depends on the `postgres` npm package. postgres.js is pure

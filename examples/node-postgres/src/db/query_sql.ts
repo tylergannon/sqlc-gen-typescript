@@ -2,6 +2,12 @@
 
 import type { Sql } from "postgres";
 
+export type JsonPrimitive = string | number | boolean | null;
+
+export type JsonValue = JsonPrimitive | readonly JsonValue[] | {
+    readonly [key: string]: JsonValue | undefined;
+};
+
 export type AuthorStatus = "active" | "inactive" | "pending";
 
 export interface GetAuthorArgs {
@@ -13,10 +19,12 @@ export interface GetAuthorRow {
     name: string;
     bio: string | null;
     status: AuthorStatus;
+    profile: JsonValue;
+    notes: JsonValue | null;
 }
 
 export async function getAuthor(sql: Sql, args: GetAuthorArgs): Promise<GetAuthorRow | null> {
-    const rows = await sql<GetAuthorRow[]> `SELECT id, name, bio, status FROM authors
+    const rows = await sql<GetAuthorRow[]> `SELECT id, name, bio, status, profile, notes FROM authors
 WHERE id = ${args.id} LIMIT 1`;
     return rows[0] ?? null;
 }
@@ -26,10 +34,12 @@ export interface ListAuthorsRow {
     name: string;
     bio: string | null;
     status: AuthorStatus;
+    profile: JsonValue;
+    notes: JsonValue | null;
 }
 
 export async function listAuthors(sql: Sql): Promise<ListAuthorsRow[]> {
-    return await sql<ListAuthorsRow[]> `SELECT id, name, bio, status FROM authors
+    return await sql<ListAuthorsRow[]> `SELECT id, name, bio, status, profile, notes FROM authors
 ORDER BY name`;
 }
 
@@ -37,6 +47,8 @@ export interface CreateAuthorArgs {
     name: string;
     bio: string | null;
     status: AuthorStatus;
+    profile: JsonValue;
+    notes: JsonValue | null;
 }
 
 export interface CreateAuthorRow {
@@ -44,15 +56,17 @@ export interface CreateAuthorRow {
     name: string;
     bio: string | null;
     status: AuthorStatus;
+    profile: JsonValue;
+    notes: JsonValue | null;
 }
 
 export async function createAuthor(sql: Sql, args: CreateAuthorArgs): Promise<CreateAuthorRow | null> {
     const rows = await sql<CreateAuthorRow[]> `INSERT INTO authors (
-  name, bio, status
+  name, bio, status, profile, notes
 ) VALUES (
-  ${args.name}, ${args.bio}, ${args.status}
+  ${args.name}, ${args.bio}, ${args.status}, ${sql.json(args.profile)}, ${args.notes === null ? null : sql.json(args.notes)}
 )
-RETURNING id, name, bio, status`;
+RETURNING id, name, bio, status, profile, notes`;
     return rows[0] ?? null;
 }
 
@@ -65,10 +79,12 @@ export interface ListAuthorsByStatusRow {
     name: string;
     bio: string | null;
     status: AuthorStatus;
+    profile: JsonValue;
+    notes: JsonValue | null;
 }
 
 export async function listAuthorsByStatus(sql: Sql, args: ListAuthorsByStatusArgs): Promise<ListAuthorsByStatusRow[]> {
-    return await sql<ListAuthorsByStatusRow[]> `SELECT id, name, bio, status FROM authors
+    return await sql<ListAuthorsByStatusRow[]> `SELECT id, name, bio, status, profile, notes FROM authors
 WHERE status = ${args.status}
 ORDER BY name`;
 }

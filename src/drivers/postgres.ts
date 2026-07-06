@@ -7,7 +7,14 @@
  *   - types.bigint.parse for bigint -> number conversion
  */
 
-import { SyntaxKind, NodeFlags, TypeNode, factory, FunctionDeclaration } from "typescript";
+import {
+  SyntaxKind,
+  NodeFlags,
+  TypeNode,
+  Expression,
+  factory,
+  FunctionDeclaration,
+} from "typescript";
 
 import { Parameter, Column, Enum } from "../gen/plugin/codegen_pb";
 import { argName } from "./utils";
@@ -29,11 +36,35 @@ export function getEnumName(column?: Column): string | null {
   if (column === undefined || column.type === undefined) {
     return null;
   }
-  const typeName = column.type.name.toLowerCase();
+  const typeName = normalizedTypeName(column);
+  if (typeName === null) {
+    return null;
+  }
   if (enumMap.has(typeName)) {
     return typeName;
   }
   return null;
+}
+
+function normalizedTypeName(column?: Column): string | null {
+  if (column === undefined || column.type === undefined) {
+    return null;
+  }
+  let typeName = column.type.name;
+  const pgCatalog = "pg_catalog.";
+  if (typeName.startsWith(pgCatalog)) {
+    typeName = typeName.slice(pgCatalog.length);
+  }
+  return typeName.toLowerCase();
+}
+
+export function isJsonColumn(column?: Column): boolean {
+  const typeName = normalizedTypeName(column);
+  return typeName === "json" || typeName === "jsonb";
+}
+
+function isScalarJsonColumn(column?: Column): boolean {
+  return isJsonColumn(column) && !column?.isArray && (column?.arrayDims ?? 0) === 0;
 }
 
 /**
@@ -48,16 +79,19 @@ function pascalCase(str: string): string {
 
 export function columnType(column?: Column): TypeNode {
   if (column === undefined || column.type === undefined) {
-    return factory.createKeywordTypeNode(SyntaxKind.AnyKeyword);
+    throw new Error(
+      `Missing PostgreSQL type metadata for column "${column?.name || "unknown"}". ` +
+        `Try adding an explicit cast or named parameter in your query.`,
+    );
   }
   const originalTypeName = column.type.name;
-  let typeName = originalTypeName;
-  const pgCatalog = "pg_catalog.";
-  if (typeName.startsWith(pgCatalog)) {
-    typeName = typeName.slice(pgCatalog.length);
+  const lowerTypeName = normalizedTypeName(column);
+  if (lowerTypeName === null) {
+    throw new Error(
+      `Missing PostgreSQL type metadata for column "${column.name || "unknown"}". ` +
+        `Try adding an explicit cast or named parameter in your query.`,
+    );
   }
-
-  const lowerTypeName = typeName.toLowerCase();
 
   // Check if it's an enum type
   if (enumMap.has(lowerTypeName)) {
@@ -126,10 +160,10 @@ export function columnType(column?: Column): TypeNode {
     case "oid":
       typ = factory.createKeywordTypeNode(SyntaxKind.NumberKeyword);
       break;
-    // JSON types - any to allow flexible object access
+    // JSON types
     case "json":
     case "jsonb":
-      typ = factory.createKeywordTypeNode(SyntaxKind.AnyKeyword);
+      typ = factory.createTypeReferenceNode(factory.createIdentifier("JsonValue"), undefined);
       break;
     // Void type (from functions like pg_advisory_xact_lock)
     case "void":
@@ -254,7 +288,7 @@ function funcParamsDecl(iface: string | undefined, params: Parameter[]) {
 function buildTaggedTemplate(queryText: string, params: Parameter[]) {
   // Parse the SQL to find $1, $2, etc. and split into parts
   const parts: string[] = [];
-  const expressions: ReturnType<typeof factory.createPropertyAccessExpression>[] = [];
+  const expressions: Expression[] = [];
 
   // Regex to match $1, $2, etc.
   const paramRegex = /\$(\d+)/g;
@@ -269,12 +303,39 @@ function buildTaggedTemplate(queryText: string, params: Parameter[]) {
     const param = params[paramIndex];
 
     if (param) {
-      expressions.push(
-        factory.createPropertyAccessExpression(
-          factory.createIdentifier("args"),
-          factory.createIdentifier(argName(paramIndex, param.column)),
-        ),
+      const arg = factory.createPropertyAccessExpression(
+        factory.createIdentifier("args"),
+        factory.createIdentifier(argName(paramIndex, param.column)),
       );
+      if (isScalarJsonColumn(param.column)) {
+        const jsonArg = factory.createCallExpression(
+          factory.createPropertyAccessExpression(
+            factory.createIdentifier("sql"),
+            factory.createIdentifier("json"),
+          ),
+          undefined,
+          [arg],
+        );
+        if (param.column?.notNull) {
+          expressions.push(jsonArg);
+        } else {
+          expressions.push(
+            factory.createConditionalExpression(
+              factory.createBinaryExpression(
+                arg,
+                factory.createToken(SyntaxKind.EqualsEqualsEqualsToken),
+                factory.createNull(),
+              ),
+              factory.createToken(SyntaxKind.QuestionToken),
+              factory.createNull(),
+              factory.createToken(SyntaxKind.ColonToken),
+              jsonArg,
+            ),
+          );
+        }
+      } else {
+        expressions.push(arg);
+      }
     } else {
       // Fallback if param not found (shouldn't happen)
       expressions.push(
