@@ -1,0 +1,51 @@
+# sqlc-gen-typescript
+
+PagerGuild-owned sqlc WASM plugin for generating TypeScript query wrappers for
+PostgreSQL and postgres.js.
+
+Use this plugin from sqlc:
+
+```yaml
+version: "2"
+plugins:
+  - name: ts
+    wasm:
+      url: https://github.com/pagerguild/sqlc-gen-typescript/releases/download/v0.5.2/sqlc-gen-typescript.wasm
+      sha256: 6c6d36cf48b74e952fccb078b961ee91b75b4ceec59ad522505c0b992d29d149
+sql:
+  - schema: "db/schema.sql"
+    queries: "db/query.sql"
+    engine: "postgresql"
+    codegen:
+      - plugin: ts
+        out: "src/db"
+        options:
+          driver: postgres
+```
+
+Application runtime:
+
+```ts
+import postgres from "postgres";
+
+export const sql = postgres(process.env.DATABASE_URL, {
+  transform: postgres.camel,
+  types: {
+    bigint: {
+      to: 20,
+      from: [20],
+      serialize: String,
+      parse: Number,
+    },
+  },
+});
+```
+
+Generated functions accept a postgres.js `Sql` instance as their first argument.
+Generated types are compile-time only; runtime row parsing is controlled by
+postgres.js. Current bigint policy emits PostgreSQL `int8`/`bigint`/`bigserial`
+as TypeScript `number`, so configure OID 20 parsing as shown when selecting
+bigint values. This is intended for values below `Number.MAX_SAFE_INTEGER`.
+
+Current supported surface: PostgreSQL, postgres.js, Node.js/Vercel. Do not rely
+on old Bun SQL, MySQL, SQLite, or upstream-sync README instructions.

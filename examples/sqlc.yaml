@@ -2,8 +2,8 @@ version: "2"
 plugins:
 - name: ts
   wasm:
-    url: https://github.com/pagerguild/sqlc-gen-typescript/releases/download/v0.2.7/sqlc-gen-typescript.wasm
-    sha256: e767b29b6d40e53563be95ebaf6eb7e0964d72cfeebc36167ba00a3bc8afba92
+    url: https://github.com/pagerguild/sqlc-gen-typescript/releases/download/v0.5.2/sqlc-gen-typescript.wasm
+    sha256: 6c6d36cf48b74e952fccb078b961ee91b75b4ceec59ad522505c0b992d29d149
 sql:
 - schema: "authors/postgresql/schema.sql"
   queries: "authors/postgresql/query.sql"

@@ -8,7 +8,17 @@ import {
 } from "./db/query_sql";
 
 async function main() {
-  const sql = postgres(process.env["DATABASE_URL"] ?? "");
+  const sql = postgres(process.env["DATABASE_URL"] ?? "", {
+    transform: postgres.camel,
+    types: {
+      bigint: {
+        to: 20,
+        from: [20],
+        serialize: String,
+        parse: Number,
+      },
+    },
+  });
 
   // Create an author
   const author = await createAuthor(sql, {
