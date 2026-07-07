@@ -1,42 +1,27 @@
-# Generate examples using sqlc-dev
+# Generate examples using sqlc
 generate: plugin-wasm
-    cd examples && sqlc-dev -f sqlc.dev.yaml generate
+    cd examples && sqlc -f sqlc.dev.yaml generate
 
-# Compile JavaScript to WASM using javy
-# https://github.com/bytecodealliance/javy
-
-# Set JAVY_PATH to the directory containing javy if not in system PATH
-plugin-wasm: out-js
-    #!/usr/bin/env bash
-    JAVY=javy
-    if [ -n "$JAVY_PATH" ]; then
-        JAVY="$JAVY_PATH/javy"
-    fi
-    $JAVY build out.js -o examples/plugin.wasm
-
-# Bundle TypeScript to JavaScript using rolldown
-out-js: codegen-proto
-    bun run rolldown -c rolldown.config.ts
-
-# Generate protobuf code using buf
-codegen-proto: lint
-    buf generate --template buf.gen.yaml buf.build/sqlc/sqlc --path plugin/
+# Compile the Go plugin to WASM.
+plugin-wasm:
+    GOOS=wasip1 GOARCH=wasm go build -o examples/plugin.wasm ./cmd/sqlc-gen-typescript
 
 # Clean build artifacts
 clean:
-    rm -f out.js examples/plugin.wasm
+    rm -f examples/plugin.wasm
 
-# Format TypeScript
+# Format Go
 fmt:
-    bun run oxfmt
+    go tool goimports -w cmd internal
+    go tool modernize -fix ./...
 
-# Lint TypeScript
+# Lint Go
 lint:
-    bun run oxlint --type-aware --type-check
+    golangci-lint run ./...
 
 # Run unit tests
 test:
-    bun test
+    go test ./...
 
 # Build everything from scratch
 build: clean generate

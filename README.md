@@ -6,6 +6,7 @@ TypeScript code generation for [`sqlc`](https://sqlc.dev/) targeting PostgreSQL 
 This is standalone software maintained at
 [`tylergannon/sqlc-gen-typescript`](https://github.com/tylergannon/sqlc-gen-typescript).
 The supported install path is the WASM binary published from this repository.
+The plugin is implemented in Go and compiled to WASI WASM for releases.
 
 ## Status
 
@@ -143,12 +144,6 @@ history and is not supported by the current generator.
 
 ## Local Development
 
-Install dependencies:
-
-```sh
-bun install
-```
-
 Run checks:
 
 ```sh
@@ -162,8 +157,14 @@ Build the WASM plugin:
 just plugin-wasm
 ```
 
-The build expects `buf` and `javy` to be installed. The release workflow installs
-Javy 8.0.0 and publishes `sqlc-gen-typescript.wasm` to GitHub Releases.
+The build expects Go, Just, and `sqlc` to be installed. The release workflow
+publishes `sqlc-gen-typescript.wasm` to GitHub Releases.
+
+To regenerate the examples with a local plugin build:
+
+```sh
+just generate
+```
 
 To test a local plugin build:
 

@@ -1,7 +1,8 @@
 # sqlc-gen-typescript
 
-Standalone sqlc WASM plugin for generating TypeScript query wrappers for
-PostgreSQL and postgres.js, maintained at `tylergannon/sqlc-gen-typescript`.
+Standalone Go-built sqlc WASM plugin for generating TypeScript query wrappers
+for PostgreSQL and postgres.js, maintained at
+`tylergannon/sqlc-gen-typescript`.
 
 Use this plugin from sqlc:
 
@@ -51,4 +52,6 @@ instead of `any`. Scalar JSON parameters are wrapped with `sql.json(...)`; for
 nullable JSON parameters, JavaScript `null` is sent as SQL `NULL`.
 
 Current supported surface: PostgreSQL, postgres.js, Node.js/Vercel. Do not rely
-on old Bun SQL, MySQL, SQLite, or upstream-sync README instructions.
+on old Bun SQL, MySQL, SQLite, or upstream-sync README instructions. The Go
+implementation keeps output rendering target-aware so future runtimes such as
+Bun can be added without rewriting sqlc request analysis.
