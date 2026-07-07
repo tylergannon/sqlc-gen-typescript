@@ -1,0 +1,16 @@
+{
+  "compilerOptions": {
+    "baseUrl": ".",
+    "module": "esnext",
+    "moduleResolution": "node",
+    "noEmit": true,
+    "paths": {
+      "$lib/*": ["src/lib/*"],
+      "postgres": ["../node-postgres/node_modules/postgres/types/index.d.ts"]
+    },
+    "skipLibCheck": true,
+    "strict": true,
+    "target": "es2020"
+  },
+  "include": ["src/**/*.d.ts", "src/**/*.ts"]
+}

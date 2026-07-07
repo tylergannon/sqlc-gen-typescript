@@ -29,7 +29,7 @@ version: "2"
 plugins:
   - name: ts
     wasm:
-      url: https://github.com/tylergannon/sqlc-gen-typescript/releases/download/v0.5.3/sqlc-gen-typescript.wasm
+      url: https://github.com/tylergannon/sqlc-gen-typescript/releases/download/v0.6.0/sqlc-gen-typescript.wasm
 sql:
   - schema: "db/schema.sql"
     queries: "db/query.sql"
@@ -115,9 +115,10 @@ WHERE id = ${args.id} LIMIT 1`;
 }
 ```
 
-Generated TypeScript types are compile-time types. The generated code does not
-post-process rows or validate runtime values. Runtime parsing belongs to
-postgres.js configuration.
+Generated TypeScript types are compile-time types. By default, generated code
+does not post-process rows or validate runtime values. Runtime parsing belongs
+to postgres.js configuration unless you configure an explicit override
+converter.
 
 PostgreSQL `json` and `jsonb` columns are emitted as `JsonValue` instead of
 `any`:
@@ -175,16 +176,58 @@ plugins:
       url: file:///absolute/path/to/plugin.wasm
 ```
 
-## Planned Type Overrides
+## Type Overrides
 
-The current bigint behavior is hard-coded. A future version should support an
-option such as:
+Use `overrides` to replace the generated TypeScript type for a PostgreSQL type
+or for a specific column:
 
 ```yaml
 options:
   driver: postgres
-  bigint: number # number | string | bigint
+  overrides:
+    - db_type: "uuid"
+      nullable: true
+      ts_type:
+        import: "$lib/model/types"
+        type: "UUID"
+    - column: "users.birthday"
+      ts_type:
+        import: "$lib/model/types"
+        type: "DateTime"
+      raw_type: "string"
+      convert:
+        import: "$lib/model/types"
+        type: "strToDateTime"
+    - db_type: "int8"
+      nullable: false
+      type: "number"
+      raw_type: "string"
+      convert: "Number"
 ```
 
-That would let projects choose between ergonomic numbers, precision-preserving
-strings, or native JavaScript `bigint` with matching postgres.js parser setup.
+Column overrides take precedence over `db_type` overrides. A `db_type` override
+matches nullable and non-nullable columns separately, following sqlc's Go
+generator behavior. Add both `nullable: true` and non-nullable overrides if you
+want one database type to be replaced in both cases. Column overrides ignore
+`nullable`.
+
+`ts_type` can be a string for locally available or global types, or an object
+with `import` and `type` when the generated file should import a named type.
+For convenience, `type` is accepted as an alias for `ts_type` on an override.
+
+When `convert` is present on an output column override, generated query
+functions fetch a raw row type and map that column through the named converter
+before returning the public row type. Parameter values are still passed to
+postgres.js directly. Use `raw_type` when the database driver returns a
+different TypeScript shape than the public type. For example, postgres.js
+returns PostgreSQL `int8` values as strings by default, so a BIGINT-to-`number`
+override can use `raw_type: "string"` and `convert: "Number"`.
+
+The current bigint behavior remains hard-coded as `number`. A future version can
+add a `bigint: number | string | bigint` option for projects that prefer
+precision-preserving strings or native JavaScript `bigint`.
+
+See `examples/type-overrides` for a working fixture that exercises imported
+types, global type shorthand, nullable and non-nullable `db_type` overrides,
+column overrides, raw driver types, output converters, BIGINT-to-`number`
+conversion, and JSON parameters.

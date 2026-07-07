@@ -64,7 +64,7 @@ nullable scalar JSON parameters preserve SQL `NULL` with
 
 ## Options And Overrides
 
-Implement defaults first, but reserve a stable option namespace:
+The generator keeps a stable option namespace:
 
 ```yaml
 options:
@@ -72,20 +72,34 @@ options:
   runtime: postgres
   bigint: number
   overrides:
-    - db_type: numeric
+    - db_type: uuid
       nullable: true
-      ts_type: string | null
+      ts_type:
+        import: "$lib/model/types"
+        type: "UUID"
+    - column: users.birthday
+      ts_type:
+        import: "$lib/model/types"
+        type: "DateTime"
+      raw_type: string
+      convert:
+        import: "$lib/model/types"
+        type: "strToDateTime"
 ```
 
-Near-term rules:
+Current rules:
 
 - `driver` remains accepted as `postgres` for compatibility.
 - `runtime` can later distinguish `postgres`, `bun`, or another emitted client.
 - `bigint` can later support `number`, `string`, and `bigint`.
-- `overrides` should match before the built-in PostgreSQL type table.
-
-The first port does not need to implement overrides, but option parsing should be
-centralized so overrides do not require changing generator orchestration.
+- Column overrides take precedence over `db_type` overrides.
+- `db_type` overrides match nullable and non-nullable columns separately.
+- Column overrides ignore `nullable`.
+- `ts_type` may be a string or an `{ import, type }` object.
+- `raw_type` may be a string or an `{ import, type }` object for converter
+  source values when the driver returns a different type than the public API.
+- `convert` may be used on output column overrides to map raw postgres.js row
+  values into the public TypeScript row type.
 
 ## Parity Contract
 

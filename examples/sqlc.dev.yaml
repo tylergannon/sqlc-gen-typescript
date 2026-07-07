@@ -16,3 +16,48 @@ sql:
   codegen:
   - plugin: ts
     out: bun-postgres/src/db
+- schema: "type-overrides/postgresql/schema.sql"
+  queries: "type-overrides/postgresql/query.sql"
+  engine: "postgresql"
+  codegen:
+  - plugin: ts
+    out: type-overrides/src/db
+    options:
+      driver: postgres
+      overrides:
+      - db_type: "uuid"
+        nullable: false
+        ts_type:
+          import: "$lib/model/types"
+          type: "UUID"
+      - db_type: "uuid"
+        nullable: true
+        ts_type:
+          import: "$lib/model/types"
+          type: "UUID"
+      - db_type: "int8"
+        nullable: false
+        type: "number"
+        raw_type: "string"
+        convert: "Number"
+      - db_type: "int8"
+        nullable: true
+        type: "number"
+        raw_type: "string"
+        convert: "Number"
+      - column: "users.email"
+        ts_type:
+          import: "$lib/model/types"
+          type: "EmailAddress"
+      - column: "users.birthday"
+        type: "DateTime"
+        raw_type: "string"
+        convert:
+          import: "$lib/model/types"
+          type: "strToDateTime"
+      - column: "users.invited_at"
+        type: "DateTime"
+        raw_type: "string"
+        convert:
+          import: "$lib/model/types"
+          type: "strToDateTime"

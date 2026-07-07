@@ -3,6 +3,7 @@ package generator_test
 import (
 	"context"
 	"os"
+	"strings"
 	"testing"
 
 	"github.com/sqlc-dev/plugin-sdk-go/plugin"
@@ -29,6 +30,77 @@ func TestGenerateAuthorsFixtureMatchesOracle(t *testing.T) {
 	}
 	if got := string(file.GetContents()); got != string(want) {
 		t.Fatalf("generated fixture mismatch\n--- got ---\n%s\n--- want ---\n%s", got, string(want))
+	}
+}
+
+func TestGenerateAppliesTypeOverridesAndConverter(t *testing.T) {
+	resp, err := generator.Generate(context.Background(), &plugin.GenerateRequest{
+		PluginOptions: []byte(`{
+			"overrides": [
+				{
+					"db_type": "uuid",
+					"nullable": true,
+					"ts_type": {
+						"import": "$lib/model/types",
+						"type": "UUID"
+					}
+				},
+				{
+					"column": "users.birthday",
+					"ts_type": {
+						"import": "$lib/model/types",
+						"type": "DateTime"
+					},
+					"convert": {
+						"import": "$lib/model/types",
+						"type": "strToDateTime"
+					}
+				},
+				{
+					"db_type": "bigint",
+					"ts_type": "number",
+					"raw_type": "string",
+					"convert": "Number"
+				}
+			]
+		}`),
+		Queries: []*plugin.Query{{
+			Name:     "GetUser",
+			Cmd:      ":one",
+			Filename: "users.sql",
+			Text:     "SELECT favorite_id, birthday, login_count FROM users WHERE favorite_id = $1",
+			Params: []*plugin.Parameter{{
+				Column: tableColumn("users", "favorite_id", "uuid", false),
+			}},
+			Columns: []*plugin.Column{
+				tableColumn("users", "favorite_id", "uuid", false),
+				tableColumn("users", "birthday", "text", true),
+				tableColumn("users", "login_count", "bigint", true),
+			},
+		}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(resp.GetFiles()) != 1 {
+		t.Fatalf("got %d files, want 1", len(resp.GetFiles()))
+	}
+
+	got := string(resp.GetFiles()[0].GetContents())
+	wants := []string{
+		`import type { DateTime, UUID } from "$lib/model/types";`,
+		`import { strToDateTime } from "$lib/model/types";`,
+		"export interface GetUserArgs {\n    favoriteId: UUID | null;\n}",
+		"interface GetUserRowRaw {\n    favoriteId: UUID | null;\n    birthday: string;\n    loginCount: string;\n}",
+		"export interface GetUserRow {\n    favoriteId: UUID | null;\n    birthday: DateTime;\n    loginCount: number;\n}",
+		"const rows = await sql<GetUserRowRaw[]> `SELECT favorite_id, birthday, login_count FROM users WHERE favorite_id = ${args.favoriteId}`;",
+		"return row === undefined ? null : mapGetUserRow(row);",
+		"function mapGetUserRow(row: GetUserRowRaw): GetUserRow {\n    return {\n        ...row,\n        birthday: strToDateTime(row.birthday),\n        loginCount: Number(row.loginCount),\n    };\n}",
+	}
+	for _, want := range wants {
+		if !strings.Contains(got, want) {
+			t.Fatalf("generated output missing %q\n--- got ---\n%s", want, got)
+		}
 	}
 }
 
@@ -120,4 +192,10 @@ func column(name string, typeName string, notNull bool) *plugin.Column {
 		NotNull: notNull,
 		Type:    &plugin.Identifier{Name: typeName},
 	}
+}
+
+func tableColumn(tableName string, name string, typeName string, notNull bool) *plugin.Column {
+	col := column(name, typeName, notNull)
+	col.Table = &plugin.Identifier{Schema: "public", Name: tableName}
+	return col
 }

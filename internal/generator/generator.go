@@ -3,6 +3,7 @@ package generator
 import (
 	"context"
 	"fmt"
+	"slices"
 	"strings"
 
 	"github.com/sqlc-dev/plugin-sdk-go/plugin"
@@ -15,7 +16,8 @@ import (
 )
 
 func Generate(_ context.Context, req *plugin.GenerateRequest) (*plugin.GenerateResponse, error) {
-	if _, err := options.Parse(req); err != nil {
+	opts, err := options.Parse(req)
+	if err != nil {
 		return nil, err
 	}
 
@@ -32,7 +34,7 @@ func Generate(_ context.Context, req *plugin.GenerateRequest) (*plugin.GenerateR
 
 	resp := &plugin.GenerateResponse{}
 	for _, filename := range filenames {
-		renderFile, err := buildFile(filename, queryMap[filename], enumMap)
+		renderFile, err := buildFile(filename, queryMap[filename], enumMap, opts)
 		if err != nil {
 			return nil, err
 		}
@@ -44,7 +46,7 @@ func Generate(_ context.Context, req *plugin.GenerateRequest) (*plugin.GenerateR
 	return resp, nil
 }
 
-func buildFile(filename string, queries []*plugin.Query, enumMap postgres.EnumMap) (ts.File, error) {
+func buildFile(filename string, queries []*plugin.Query, enumMap postgres.EnumMap, opts *options.Options) (ts.File, error) {
 	renderFile := ts.File{}
 	fileEnums := map[string]bool{}
 	for _, query := range queries {
@@ -62,7 +64,7 @@ func buildFile(filename string, queries []*plugin.Query, enumMap postgres.EnumMa
 			for i, param := range query.GetParams() {
 				name := model.ArgName(i, param.GetColumn().GetName())
 				names = append(names, name)
-				field, err := fieldForColumn(name, param.GetColumn(), enumMap)
+				field, err := fieldForColumn(name, param.GetColumn(), enumMap, opts, false)
 				if err != nil {
 					return ts.File{}, fmt.Errorf("error in query %q (%s): %w", query.GetName(), filename, err)
 				}
@@ -84,7 +86,7 @@ func buildFile(filename string, queries []*plugin.Query, enumMap postgres.EnumMa
 			for i, column := range query.GetColumns() {
 				name := model.ColName(i, column.GetName())
 				names = append(names, name)
-				field, err := fieldForColumn(name, column, enumMap)
+				field, err := fieldForColumn(name, column, enumMap, opts, true)
 				if err != nil {
 					return ts.File{}, fmt.Errorf("error in query %q (%s): %w", query.GetName(), filename, err)
 				}
@@ -118,12 +120,113 @@ func buildFile(filename string, queries []*plugin.Query, enumMap postgres.EnumMa
 	return renderFile, nil
 }
 
-func fieldForColumn(name string, column *plugin.Column, enumMap postgres.EnumMap) (*ts.Field, error) {
+func fieldForColumn(name string, column *plugin.Column, enumMap postgres.EnumMap, opts *options.Options, allowConverter bool) (*ts.Field, error) {
 	typ, err := postgres.ColumnType(enumMap, column)
 	if err != nil {
 		return nil, err
 	}
-	return &ts.Field{Name: name, Type: typ}, nil
+	field := &ts.Field{Name: name, Type: typ}
+	override := matchOverride(opts, column)
+	if override == nil {
+		return field, nil
+	}
+
+	field.Type = typeRefWithOverride(typ, override.TSType)
+	if allowConverter && !override.Convert.IsZero() {
+		field.WireType = typ
+		if !override.RawType.IsZero() {
+			field.WireType = typeRefWithOverride(typ, override.RawType)
+		}
+		field.Converter = &ts.ImportRef{
+			Name:       override.Convert.Name,
+			ImportPath: override.Convert.ImportPath,
+		}
+	}
+	return field, nil
+}
+
+func typeRefWithOverride(base model.TypeRef, spec options.SymbolSpec) model.TypeRef {
+	base.Name = spec.Name
+	base.ImportPath = spec.ImportPath
+	return base
+}
+
+func matchOverride(opts *options.Options, column *plugin.Column) *options.Override {
+	if opts == nil {
+		return nil
+	}
+	for i := range opts.Overrides {
+		override := &opts.Overrides[i]
+		if override.Column != "" && columnOverrideMatches(override.Column, column) {
+			return override
+		}
+	}
+	for i := range opts.Overrides {
+		override := &opts.Overrides[i]
+		if override.DBType == "" {
+			continue
+		}
+		if normalizeOverrideType(override.DBType) != postgres.NormalizedTypeName(column) {
+			continue
+		}
+		nullable := false
+		if override.Nullable != nil {
+			nullable = *override.Nullable
+		}
+		if nullable != !column.GetNotNull() {
+			continue
+		}
+		if override.Unsigned != column.GetUnsigned() {
+			continue
+		}
+		return override
+	}
+	return nil
+}
+
+func columnOverrideMatches(pattern string, column *plugin.Column) bool {
+	pattern = strings.ToLower(pattern)
+	return slices.Contains(columnOverrideCandidates(column), pattern)
+}
+
+func columnOverrideCandidates(column *plugin.Column) []string {
+	if column == nil {
+		return nil
+	}
+	columnNames := []string{column.GetName()}
+	if column.GetOriginalName() != "" && column.GetOriginalName() != column.GetName() {
+		columnNames = append(columnNames, column.GetOriginalName())
+	}
+
+	var candidates []string
+	table := column.GetTable()
+	for _, columnName := range columnNames {
+		columnName = strings.ToLower(columnName)
+		if columnName == "" {
+			continue
+		}
+		if table != nil && table.GetName() != "" {
+			tableName := strings.ToLower(table.GetName())
+			schemaName := strings.ToLower(table.GetSchema())
+			catalogName := strings.ToLower(table.GetCatalog())
+			candidates = append(candidates, tableName+"."+columnName)
+			if schemaName != "" {
+				candidates = append(candidates, schemaName+"."+tableName+"."+columnName)
+			}
+			if catalogName != "" && schemaName != "" {
+				candidates = append(candidates, catalogName+"."+schemaName+"."+tableName+"."+columnName)
+			}
+		}
+		if column.GetScope() != "" {
+			candidates = append(candidates, strings.ToLower(column.GetScope())+"."+columnName)
+		}
+		candidates = append(candidates, columnName)
+	}
+	return candidates
+}
+
+func normalizeOverrideType(typeName string) string {
+	return strings.TrimPrefix(strings.ToLower(typeName), "pg_catalog.")
 }
 
 func trackColumnSharedTypes(file *ts.File, _ map[string]bool, enumMap postgres.EnumMap, column *plugin.Column) {

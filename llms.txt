@@ -11,7 +11,7 @@ version: "2"
 plugins:
   - name: ts
     wasm:
-      url: https://github.com/tylergannon/sqlc-gen-typescript/releases/download/v0.5.3/sqlc-gen-typescript.wasm
+      url: https://github.com/tylergannon/sqlc-gen-typescript/releases/download/v0.6.0/sqlc-gen-typescript.wasm
 sql:
   - schema: "db/schema.sql"
     queries: "db/query.sql"
@@ -42,10 +42,11 @@ export const sql = postgres(process.env.DATABASE_URL, {
 ```
 
 Generated functions accept a postgres.js `Sql` instance as their first argument.
-Generated types are compile-time only; runtime row parsing is controlled by
-postgres.js. Current bigint policy emits PostgreSQL `int8`/`bigint`/`bigserial`
-as TypeScript `number`, so configure OID 20 parsing as shown when selecting
-bigint values. This is intended for values below `Number.MAX_SAFE_INTEGER`.
+Generated types are compile-time only by default; runtime row parsing is
+controlled by postgres.js unless an explicit override converter is configured.
+Current bigint policy emits PostgreSQL `int8`/`bigint`/`bigserial` as
+TypeScript `number`, so configure OID 20 parsing as shown when selecting bigint
+values. This is intended for values below `Number.MAX_SAFE_INTEGER`.
 
 PostgreSQL `json` and `jsonb` are emitted as generated `JsonValue` aliases
 instead of `any`. Scalar JSON parameters are wrapped with `sql.json(...)`; for
@@ -55,3 +56,16 @@ Current supported surface: PostgreSQL, postgres.js, Node.js/Vercel. Do not rely
 on old Bun SQL, MySQL, SQLite, or upstream-sync README instructions. The Go
 implementation keeps output rendering target-aware so future runtimes such as
 Bun can be added without rewriting sqlc request analysis.
+
+Type overrides are configured under plugin `options.overrides`. Use `db_type`
+for database-type matches or `column` for `table.column`,
+`schema.table.column`, or `catalog.schema.table.column` matches. Column
+overrides win over `db_type` overrides. `db_type` overrides match nullable and
+non-nullable columns separately with `nullable`, like sqlc's Go generator.
+`ts_type` can be a string or `{ import, type }`; `type` is also accepted as an
+override-level alias for `ts_type`. `raw_type` can be a string or
+`{ import, type }` for converter source values when the driver returns a
+different type than the public API. `convert: { import, type }` imports a named
+function and maps matching output columns from the raw postgres.js row type to
+the public generated row type; plain strings such as `convert: "Number"` are
+valid for global functions.

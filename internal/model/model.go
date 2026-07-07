@@ -3,9 +3,10 @@ package model
 import "strings"
 
 type TypeRef struct {
-	Name     string
-	Nullable bool
-	ArrayDim int
+	Name       string
+	ImportPath string
+	Nullable   bool
+	ArrayDim   int
 }
 
 func (t TypeRef) Render() string {
