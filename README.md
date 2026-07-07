@@ -8,6 +8,19 @@ This is standalone software maintained at
 The supported install path is the WASM binary published from this repository.
 The plugin is implemented in Go and compiled to WASI WASM for releases.
 
+## Agent Skill
+
+This repository publishes a skill for agents that need to use this generator to
+build a PostgreSQL TypeScript DAL:
+
+```sh
+npx skills add tylergannon/sqlc-gen-typescript --skill sqlc-gen-typescript-dal
+```
+
+Use `$sqlc-gen-typescript-dal` when configuring `sqlc`, generating postgres.js
+query wrappers, choosing generator options, handling PostgreSQL dialect details,
+or adding type overrides and converters.
+
 ## Status
 
 The current generator is intentionally narrow:

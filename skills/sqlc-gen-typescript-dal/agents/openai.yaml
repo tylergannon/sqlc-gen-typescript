@@ -1,0 +1,4 @@
+interface:
+  display_name: "sqlc TypeScript DAL"
+  short_description: "Generate a postgres.js DAL with sqlc."
+  default_prompt: "Use $sqlc-gen-typescript-dal to configure sqlc, generate a TypeScript DAL for PostgreSQL, and wire the postgres.js runtime."
